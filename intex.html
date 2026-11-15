@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MyShortform</title>
+<style>
+:root{--bg:linear-gradient(135deg,#c7d2fe 0%,#fbcfe8 50%,#fde68a 100%);--card:rgba(255,255,255,.42);--tx:#1e1b2e;--mu:#554f6b;--ac:#6d28d9;--on:#fff;--bd:rgba(255,255,255,.65);--ok:#15803d;--bad:#b91c1c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 55%,#831843 100%);--card:rgba(255,255,255,.09);--tx:#f5f3ff;--mu:#c1badb;--ac:#a78bfa;--on:#1e1b4b;--bd:rgba(255,255,255,.18);--ok:#4ade80;--bad:#f87171;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 55%,#831843 100%);--card:rgba(255,255,255,.09);--tx:#f5f3ff;--mu:#c1badb;--ac:#a78bfa;--on:#1e1b4b;--bd:rgba(255,255,255,.18);--ok:#4ade80;--bad:#f87171;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg) fixed;color:var(--tx);font:16px/1.6 Georgia,"Times New Roman",serif}
+#app{max-width:720px;margin:0 auto;padding:18px 16px 48px}
+h1{font:700 26px/1.2 system-ui,sans-serif;margin:4px 0 2px}
+h2{font:700 19px/1.3 system-ui,sans-serif;margin:22px 0 8px}
+.sub{color:var(--mu);margin:0 0 16px;font-family:system-ui,sans-serif;font-size:14px}
+input,textarea,button{font:inherit;font-family:system-ui,sans-serif}
+input,textarea{width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--bd);border-radius:16px;background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:var(--tx);margin-bottom:10px}input::placeholder,textarea::placeholder{color:var(--mu)}
+textarea{min-height:200px;resize:vertical;line-height:1.5}
+button{border:0;border-radius:999px;padding:11px 18px;background:var(--ac);color:var(--on);font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(109,40,217,.3)}
+button.g{background:var(--card);color:var(--tx);border:1px solid var(--bd);box-shadow:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+button:disabled{opacity:.5}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:16px;margin:12px 0;backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);box-shadow:0 8px 32px rgba(31,38,135,.2)}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:14px 0}
+.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd);white-space:nowrap;box-shadow:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.tabs button.on{background:var(--ac);color:var(--on);border-color:var(--ac)}
+.big{font-size:18px;font-style:italic}
+details summary{cursor:pointer;font:600 16px system-ui,sans-serif}
+details p,details ul{margin:8px 0 2px}
+.opt{display:block;width:100%;text-align:left;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:16px;margin:8px 0;font-weight:400;box-shadow:none}
+.opt.ok{border-color:var(--ok);color:var(--ok)}.opt.no{border-color:var(--bad);color:var(--bad)}
+.why{font-size:14px;color:var(--mu);margin:6px 0 0;font-family:system-ui,sans-serif}
+.st{color:var(--mu);font-family:system-ui,sans-serif;font-size:14px;min-height:20px}
+.p{white-space:pre-wrap}
+</style></head>
+<body><div id="app"></div>
+<script>
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let lib=[],cur=null,tab="sum",busy=false,delArm=null,msg="",mode="book";
+try{lib=JSON.parse(localStorage.getItem("msf")||"[]")}catch(e){}
+const persist=()=>{try{localStorage.setItem("msf",JSON.stringify(lib))}catch(e){}};
+const saved=()=>cur&&lib.some(x=>x.id===cur.id);
+let key="";try{key=localStorage.getItem("msf_key")||""}catch(e){}
+const A=document.getElementById("app");
+async function ai(p){
+ const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:6000,messages:[{role:"user",content:p}]})});
+ if(r.status===401)throw new Error("API key rejected. Check it and save again.");
+ if(r.status===429)throw new Error("Rate limit hit. Wait a minute and retry.");
+ if(!r.ok)throw new Error("API error "+r.status+".");
+ const d=await r.json();const t=(d.content||[]).map(x=>x.text||"").join("");
+ const i=t.indexOf("{"),j=t.lastIndexOf("}");
+ if(i<0||j<i)throw new Error("Couldn’t read the result. Try again.");
+ return JSON.parse(t.slice(i,j+1));
+}
+
+function prompt_(t,a){
+return `You write original book summaries and study guides. Book: "${t}"${a?" by "+a:""}. If you do not reliably know this book, return {"error":"I don’t know this book well enough. Check the title or add the author."}. Otherwise return ONLY JSON: {"title":str,"author":str,"oneLiner":str,"bigIdea":str (2-3 sentences),"summary":str (4 short paragraphs separated by \\n\\n),"chapters":[{"title":str,"summary":str (2-4 sentences),"takeaways":[str,str]}] (one per chapter or major part, max 12),"quiz":[{"q":str,"options":[4 strings],"answer":0-3,"why":str}] (8 questions),"exercises":[str] (4 practical exercises to apply the ideas)}. Use your own words; never quote long passages.`}
+
+function rprompt(t){
+return `You are a careful research guide. Topic or question: "${t}". If it is too vague to research, return {"error":"Try a more specific topic or question."}. Otherwise return ONLY JSON: {"title":str,"oneLiner":str,"overview":str (3 short paragraphs separated by \\n\\n),"concepts":[{"term":str,"meaning":str (2-3 sentences),"why":str (1 sentence on why it matters)}] (6-10),"perspectives":[{"view":str,"argument":str (2-3 sentences)}] (3-5 main schools of thought or sides; fair to each),"openQuestions":[str] (4-5 good questions to explore),"searchTerms":[str] (6 precise search queries or types of sources to look for, e.g. Google Scholar queries),"quiz":[{"q":str,"options":[4 strings],"answer":0-3,"why":str}] (8 questions),"exercises":[str] (3 next-step research tasks)}. Never invent citations, statistics, or quotes; say when something is uncertain or disputed.`}
+
+function topic(b){
+ if(tab==="sum")return `<p class="big">${esc(b.oneLiner)}</p><h2>Overview</h2><div class="p">${esc(b.overview)}</div><h2>Questions to explore</h2><div class="card"><ul>${(b.openQuestions||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div><h2>Search these next</h2><div class="card"><ul>${(b.searchTerms||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+ if(tab==="ch")return (b.concepts||[]).map(c=>`<div class="card"><details><summary>${esc(c.term)}</summary><p>${esc(c.meaning)}</p><p class="why">${esc(c.why)}</p></details></div>`).join("");
+ return (b.perspectives||[]).map(p=>`<div class="card"><b>${esc(p.view)}</b><p>${esc(p.argument)}</p></div>`).join("");
+}
+
+async function gen(){
+ const t=document.getElementById("t").value.trim(),a=document.getElementById("a").value.trim();
+ if(!t||busy)return;
+ busy=true;msg="Writing your guide… this can take a minute.";render();
+ try{
+  if(!key){msg="Add your API key at the bottom first.";busy=false;render();return}
+  const b=await ai(mode==="topic"?rprompt(t):prompt_(t,a));
+  busy=false;
+  if(!b||b.error){msg=(b&&b.error)||"Couldn’t read the result. Try again.";render();return}
+  b.id=Date.now();b.kind=mode;b.notes="";b.ans={};cur=b;tab="sum";msg="";render();
+ }catch(e){busy=false;msg=e&&e.message?e.message:"Something went wrong. Try again.";render()}
+}
+
+function home(){
+ let h=`<h1>MyShortform</h1><p class="sub">Books or any topic: summaries, quizzes and notes.</p><div class="tabs"><button class="${mode==="book"?"on":""}" data-act="mode" data-k="book">Book</button><button class="${mode==="topic"?"on":""}" data-act="mode" data-k="topic">Research</button></div>
+ ${mode==="topic"?`<input id="t" placeholder="Topic or question to research" autocomplete="off"><input id="a" type="hidden"><p class="sub">Written from the AI’s own knowledge, with no live web access. Verify key facts using the search terms it gives you.</p>`:`<input id="t" placeholder="Book title" autocomplete="off"><input id="a" placeholder="Author (optional)" autocomplete="off">`}
+ <button data-act="gen" ${busy?"disabled":""}>${busy?"Working…":mode==="topic"?"Start research":"Create guide"}</button><p class="st">${esc(msg)}</p>
+ <h2>Your library</h2>`;
+ if(!lib.length)h+=`<p class="sub">Nothing saved yet. Guides you save show up here.</p>`;
+ lib.forEach((b,i)=>{h+=`<div class="card row"><div><b>${esc(b.title)}</b><br><span class="sub">${esc(b.kind==="topic"?"Research":b.author)}</span></div>
+ <div style="display:flex;gap:6px"><button data-act="open" data-i="${i}">Open</button><button class="g" data-act="del" data-i="${i}">${delArm===i?"Sure?":"✕"}</button></div></div>`});
+ h+=`<h2>API key</h2><div class="card"><input id="k" type="password" placeholder="${key?"Key saved (paste to replace)":"Paste your Anthropic API key"}" autocomplete="off"><div class="row"><button data-act="key">Save key</button>${key?`<button class="g" data-act="nokey">Remove</button>`:""}</div><p class="sub">Stored only in this browser, never in the file. Get a key at console.anthropic.com.</p></div>`;
+ return h}
+
+function book(){
+ const b=cur;
+ let h=`<div class="row"><button class="g" data-act="back">← Back</button><button ${saved()?"class=\"g\" disabled":""} data-act="save">${saved()?"Saved":"Save to library"}</button></div>
+ <h1 style="margin-top:14px">${esc(b.title)}</h1><p class="sub">${esc(b.kind==="topic"?"Research":b.author)}</p>
+ <div class="tabs">${(b.kind==="topic"?[["sum","Overview"],["ch","Concepts"],["pv","Views"],["qz","Quiz"],["nt","Notes"]]:[["sum","Summary"],["ch","Chapters"],["qz","Quiz"],["nt","Notes"]]).map(([k,l])=>`<button class="${tab===k?"on":""}" data-act="tab" data-k="${k}">${l}</button>`).join("")}</div>`;
+ if(b.kind==="topic"&&(tab==="sum"||tab==="ch"||tab==="pv"))return h+topic(b);
+ if(tab==="sum")h+=`<p class="big">${esc(b.oneLiner)}</p><h2>The big idea</h2><p>${esc(b.bigIdea)}</p><h2>Summary</h2><div class="p">${esc(b.summary)}</div>`;
+ if(tab==="ch")(b.chapters||[]).forEach((c,i)=>{h+=`<div class="card"><details><summary>${i+1}. ${esc(c.title)}</summary><p>${esc(c.summary)}</p><ul>${(c.takeaways||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details></div>`});
+ if(tab==="qz"){
+  const q=b.quiz||[];let sc=0,n=0;
+  q.forEach((x,qi)=>{const a=b.ans[qi];h+=`<div class="card"><b>${qi+1}. ${esc(x.q)}</b>`;
+   x.options.forEach((o,oi)=>{let c="opt";if(a!=null){if(oi===x.answer)c+=" ok";else if(oi===a)c+=" no"}h+=`<button class="${c}" data-act="ans" data-q="${qi}" data-o="${oi}" ${a!=null?"disabled":""}>${esc(o)}</button>`});
+   if(a!=null){n++;if(a===x.answer)sc++;h+=`<p class="why">${esc(x.why)}</p>`}h+=`</div>`});
+  h+=`<p class="row"><b>Score: ${sc}/${q.length}</b><button class="g" data-act="reset">Retry quiz</button></p><h2>Put it into practice</h2><div class="card"><ul>${(b.exercises||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`}
+ if(tab==="nt")h+=`<textarea id="nt" placeholder="Your notes on this book…">${esc(b.notes)}</textarea><p class="sub">${saved()?"Notes save automatically.":"Save this book to your library to keep your notes."}</p>`;
+ return h}
+
+function render(){A.innerHTML=cur?book():home()}
+
+let tm;
+A.addEventListener("input",e=>{if(e.target.id==="nt"){cur.notes=e.target.value;clearTimeout(tm);tm=setTimeout(persist,400)}});
+A.addEventListener("click",e=>{
+ const el=e.target.closest("[data-act]");if(!el)return;const d=el.dataset,act=d.act;
+ if(act==="gen")gen();
+ else if(act==="key"){const v=document.getElementById("k").value.trim();if(v){key=v;try{localStorage.setItem("msf_key",v)}catch(e){}msg="Key saved."}render()}
+ else if(act==="nokey"){key="";try{localStorage.removeItem("msf_key")}catch(e){}msg="Key removed.";render()}
+ else if(act==="mode"){mode=d.k;msg="";render()}
+ else if(act==="open"){cur=lib[+d.i];tab="sum";render()}
+ else if(act==="del"){const i=+d.i;if(delArm===i){lib.splice(i,1);persist();delArm=null}else delArm=i;render()}
+ else if(act==="back"){persist();cur=null;msg="";render()}
+ else if(act==="save"){if(!saved()){lib.unshift(cur);persist()}render()}
+ else if(act==="tab"){tab=d.k;render()}
+ else if(act==="ans"){cur.ans[+d.q]=+d.o;if(saved())persist();render()}
+ else if(act==="reset"){cur.ans={};if(saved())persist();render()}
+});
+render();
+</script></body></html>
